@@ -419,24 +419,30 @@
 
       try {
         const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 3000,
-            system: `แปลงข้อมูลตารางเป็น JSON array เท่านั้น ไม่มี markdown ไม่มี backtick
-[{"date":"2025-06-02","values":[0,1,17,10]}]
-วันที่เป็น YYYY-MM-DD (ค.ศ. ถ้าเป็น พ.ศ. ลบ 543)`,
-            messages: [{role: 'user', content: text.slice(0, 8000)}]
-          })
-        });
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text }) // ส่งไปแค่ text พอครับ ที่เหลือเซิร์ฟเวอร์จัดการเอง
+    });
 
-        const result = await response.json();
-        const rawText = (result.content || []).map(b => b.text || '').join('').replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(rawText);
+    // อ่านข้อมูลที่ตอบกลับมาเป็น Text ก่อน เพื่อดักจับ Error ป้องกัน UI พัง
+    const responseText = await response.text();
 
-        if(!Array.isArray(parsed)) throw new Error('ผลลัพธ์ไม่ถูกรูปแบบ');
+    if (!response.ok) {
+      let errorMessage = `เซิร์ฟเวอร์ตอบกลับ Status: ${response.status}`;
+      try {
+        const errorData = JSON.parse(responseText);
+        if (errorData.error) errorMessage = errorData.error;
+      } catch (e) {
+        if (responseText) errorMessage = responseText;
+      }
+      throw new Error(errorMessage);
+    }
 
+    // ถ้าผ่าน แปลงเป็น JSON แล้วดึงค่าผลลัพธ์มาใช้
+    const result = JSON.parse(responseText);
+    const parsed = JSON.parse(result.raw); // เซิร์ฟเวอร์เราส่งกลับมาในชื่อ .raw
+
+    if (!Array.isArray(parsed)) throw new Error('AI ไม่ได้ส่งข้อมูลตารางกลับมา');
         // Import data
         const newRows = parsed.map(p => ({
           id: genId(),
