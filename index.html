@@ -431,10 +431,11 @@
         });
 
         const result = await response.json();
-        const rawText = result.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(rawText);
+        console.log("AI ตอบกลับมาว่า:", result);
+        
+        const parsed = Array.isArray(result) ? result : (result.raw ? JSON.parse(result.raw) : []);
 
-        if(!Array.isArray(parsed)) throw new Error('ผลลัพธ์ไม่ถูกรูปแบบ');
+        if(!Array.isArray(parsed)) throw new Error('AI ส่งข้อมูลมาไม่เป็นตาราง');
 
         const newRows = parsed.map(p => ({
           id: genId(),
