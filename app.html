@@ -406,38 +406,36 @@
       document.getElementById('importError').innerHTML = `<div class="error">${msg}</div>`;
     }
 
-    async function analyzeImport() {
+   async function analyzeImport() {
       const text = document.getElementById('importText').value;
       const tableId = parseInt(document.getElementById('targetTable').value);
+      const API_KEY = "ใส่ API KEY ของคุณที่นี่"; // <--- วาง Key ของคุณตรงนี้
 
       if(!text.trim()) {
         showError('กรุณาใส่ข้อมูล');
         return;
       }
 
-      showError('<div class="success">🔄 AI กำลังวิเคราะห์... (อาจใช้เวลา 10-30 วินาที)</div>');
+      showError('<div class="success">🔄 AI กำลังวิเคราะห์...</div>');
 
       try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 3000,
-            system: `แปลงข้อมูลตารางเป็น JSON array เท่านั้น ไม่มี markdown ไม่มี backtick
+            contents: [{ parts: [{ text: `แปลงข้อมูลตารางเป็น JSON array เท่านั้น ไม่มี markdown ไม่มี backtick
 [{"date":"2025-06-02","values":[0,1,17,10]}]
-วันที่เป็น YYYY-MM-DD (ค.ศ. ถ้าเป็น พ.ศ. ลบ 543)`,
-            messages: [{role: 'user', content: text.slice(0, 8000)}]
+วันที่เป็น YYYY-MM-DD
+ข้อมูล: ${text}` }] }]
           })
         });
 
         const result = await response.json();
-        const rawText = (result.content || []).map(b => b.text || '').join('').replace(/```json|```/g, '').trim();
+        const rawText = result.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(rawText);
 
         if(!Array.isArray(parsed)) throw new Error('ผลลัพธ์ไม่ถูกรูปแบบ');
 
-        // Import data
         const newRows = parsed.map(p => ({
           id: genId(),
           date: p.date || '',
@@ -449,7 +447,7 @@
         closeImport();
         showError('');
       } catch(e) {
-        showError('วิเคราะห์ไม่สำเร็จ: ' + e.message + '\n\nกรุณาวางข้อมูลให้ชัดเจน เช่น:\nวันที่ | ค่า1 | ค่า2 | ค่า3');
+        showError('วิเคราะห์ไม่สำเร็จ: ' + e.message);
       }
     }
 
