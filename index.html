@@ -479,9 +479,9 @@
 
       if (missing.length === groups.length * cols.length) {
         showError(
-          'ไม่พบข้อมูลที่ตรงกับรูปแบบ กรุณาใส่ข้อความในรูปแบบ เช่น:' +
-          groups.map(g => cols.map(c => `${g.label} (${c.label}) เท่ากับ ตัวเลข`).join(', ')).join(', ')
-        );
+  'ไม่พบข้อมูลที่ตรงกับรูปแบบ กรุณาใส่ข้อความในรูปแบบ เช่น: ' +
+  groups.map(g => cols.map(c => `${g.label} (${c.label}) เท่ากับ ตัวเลข`).join(', ')).join(', ')
+);
         return;
       }
 
