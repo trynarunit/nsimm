@@ -406,57 +406,94 @@
       document.getElementById('importError').innerHTML = `<div class="error">${msg}</div>`;
     }
 
-    async function analyzeImport() {
+        // ==== Helper: แปลงข้อความ ตม. เป็นข้อมูลตาราง (พ.ศ. เสมอ ไม่แปลงเป็น ค.ศ.) ====
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function getMonthIndex(raw) {
+      const stripped = raw.replace(/\./g, '');
+      const shortMap = {'มค':0,'กพ':1,'มีค':2,'เมย':3,'พค':4,'มิย':5,'กค':6,'สค':7,'กย':8,'ตค':9,'พย':10,'ธค':11};
+      if (shortMap[stripped] !== undefined) return shortMap[stripped];
+      const fullMap = {'มกราคม':0,'กุมภาพันธ์':1,'มีนาคม':2,'เมษายน':3,'พฤษภาคม':4,'มิถุนายน':5,'กรกฎาคม':6,'สิงหาคม':7,'กันยายน':8,'ตุลาคม':9,'พฤศจิกายน':10,'ธันวาคม':11};
+      if (fullMap[raw] !== undefined) return fullMap[raw];
+      return undefined;
+    }
+
+    function toBuddhistYear(yearRaw) {
+      if (!yearRaw) {
+        const now = new Date();
+        return now.getFullYear() + 543;
+      }
+      const y = parseInt(yearRaw);
+      if (yearRaw.length <= 2) return 2500 + y;
+      if (y > 2400) return y;
+      return y + 543;
+    }
+
+    function findDateBE(text) {
+      const dateRegex = /(\d{1,2})\s*(ม\.?ค\.?|ก\.?พ\.?|มี\.?ค\.?|เม\.?ย\.?|พ\.?ค\.?|มิ\.?ย\.?|ก\.?ค\.?|ส\.?ค\.?|ก\.?ย\.?|ต\.?ค\.?|พ\.?ย\.?|ธ\.?ค\.?|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\.?\s*(\d{2,4})?/;
+      const m = text.match(dateRegex);
+      if (!m) return '';
+      const day = parseInt(m[1]);
+      const monthIdx = getMonthIndex(m[2]);
+      if (monthIdx === undefined) return '';
+      const beYear = toBuddhistYear(m[3]);
+      return `${beYear}-${pad2(monthIdx + 1)}-${pad2(day)}`;
+    }
+
+    function extractValuesByLabel(text, groups, cols) {
+      const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const values = [];
+      const missing = [];
+      for (const g of groups) {
+        for (const c of cols) {
+          const gEsc = escapeRegex(g.label);
+          const cEsc = escapeRegex(c.label);
+          const regex = new RegExp(gEsc + '\\s*\\(\\s*' + cEsc + '\\s*\\)\\s*(?:เท่ากับ|=|:)?\\s*(-?\\d+(?:\\.\\d+)?)', 'i');
+          const m = text.match(regex);
+          if (m) {
+            values.push(parseFloat(m[1]));
+          } else {
+            values.push(0);
+            missing.push(`${g.label} (${c.label})`);
+          }
+        }
+      }
+      return { values, missing };
+    }
+
+    function analyzeImport() {
       const text = document.getElementById('importText').value;
       const tableId = parseInt(document.getElementById('targetTable').value);
 
-      if(!text.trim()) {
+      if (!text.trim()) {
         showError('กรุณาใส่ข้อมูล');
         return;
       }
 
-      showError('<div class="success">🔄 AI กำลังวิเคราะห์... (อาจใช้เวลา 10-30 วินาที)</div>');
+      const groups = data[tableId].groups;
+      const cols = data[tableId].cols;
 
-      try {
-        const response = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text }) // ส่งไปแค่ text พอครับ ที่เหลือเซิร์ฟเวอร์จัดการเอง
-    });
+      const dateStr = findDateBE(text);
+      const { values, missing } = extractValuesByLabel(text, groups, cols);
 
-    // อ่านข้อมูลที่ตอบกลับมาเป็น Text ก่อน เพื่อดักจับ Error ป้องกัน UI พัง
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      let errorMessage = `เซิร์ฟเวอร์ตอบกลับ Status: ${response.status}`;
-      try {
-        const errorData = JSON.parse(responseText);
-        if (errorData.error) errorMessage = errorData.error;
-      } catch (e) {
-        if (responseText) errorMessage = responseText;
+      if (missing.length === groups.length * cols.length) {
+        showError(
+          'ไม่พบข้อมูลที่ตรงกับรูปแบบ กรุณาใส่ข้อความในรูปแบบ เช่น:' +
+          groups.map(g => cols.map(c => `${g.label} (${c.label}) เท่ากับ ตัวเลข`).join(', ')).join(', ')
+        );
+        return;
       }
-      throw new Error(errorMessage);
-    }
 
-    // ถ้าผ่าน แปลงเป็น JSON แล้วดึงค่าผลลัพธ์มาใช้
-    const result = JSON.parse(responseText);
-    const parsed = JSON.parse(result.raw); // เซิร์ฟเวอร์เราส่งกลับมาในชื่อ .raw
+      const newRow = { id: genId(), date: dateStr, values: values };
+      data[tableId].rows.push(newRow);
+      renderTables();
+      closeImport();
 
-    if (!Array.isArray(parsed)) throw new Error('AI ไม่ได้ส่งข้อมูลตารางกลับมา');
-        // Import data
-        const newRows = parsed.map(p => ({
-          id: genId(),
-          date: p.date || '',
-          values: p.values || []
-        }));
-
-        data[tableId].rows = [...data[tableId].rows, ...newRows];
-        renderTables();
-        closeImport();
-        showError('');
-      } catch(e) {
-        showError('วิเคราะห์ไม่สำเร็จ: ' + e.message + '\n\nกรุณาวางข้อมูลให้ชัดเจน เช่น:\nวันที่ | ค่า1 | ค่า2 | ค่า3');
-      }
+      let warn = '';
+      if (!dateStr) warn += 'ไม่พบวันที่ในข้อความ กรุณาแก้ไขวันที่ในตารางเอง';
+      if (missing.length > 0) warn += `ไม่พบข้อมูลของ: ${missing.join(', ')} (ตั้งค่าเป็น 0 ให้แล้ว)`;
+      if (warn) alert('⚠️ ' + warn.replace(//g, '\n'));
     }
 
     function openSettings(tableId) {
