@@ -232,9 +232,9 @@
     function getMonthKey(dateStr) { return dateStr.slice(0, 7); }
 
     function getMonthLabel(key) {
-      const [y, m] = key.split('-');
-      return `${THAI_MONTHS[parseInt(m) - 1]} ${parseInt(y) + 543}`;
-    }
+  const [y, m] = key.split('-');
+  return `${THAI_MONTHS[parseInt(m) - 1]} ${y}`;
+}
 
     function renderTables() {
       const t1 = data[1];
