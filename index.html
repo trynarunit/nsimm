@@ -493,7 +493,7 @@
       let warn = '';
       if (!dateStr) warn += 'ไม่พบวันที่ในข้อความ กรุณาแก้ไขวันที่ในตารางเอง';
       if (missing.length > 0) warn += `ไม่พบข้อมูลของ: ${missing.join(', ')} (ตั้งค่าเป็น 0 ให้แล้ว)`;
-      if (warn) alert('⚠️ ' + warn.replace(//g, '\n'));
+      if (warn) alert('⚠️ ' + warn);
     }
 
     function openSettings(tableId) {
